@@ -1,0 +1,25 @@
+{
+	"name": "bermuda-wizard",
+	"version": "3.0.2",
+	"description": "Bermuda Wizard web edition",
+	"main": "public/index.js",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/meeladns/Bermuda.git"
+	},
+	"author": "meeladnsai",
+	"license": "GPL-3.0",
+	"private": true,
+	"type": "module",
+	"bugs": {
+		"url": "https://github.com/meeladns/Bermuda/issues"
+	},
+	"homepage": "https://github.com/meeladns/Bermuda#readme",
+	"devDependencies": {
+		"@cloudflare/workers-types": "^5.20260716.1",
+		"typescript": "^7.0.2"
+	},
+	"dependencies": {
+		"cloudflare": "^7.0.0"
+	}
+}
