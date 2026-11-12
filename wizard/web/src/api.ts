@@ -49,6 +49,15 @@ export class CFAccount {
     }
 
     async createD1Database(workerName: string): Promise<string> {
+        const listRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${this.id}/d1/database`, {
+            headers: { 'Authorization': `Bearer ${this.token}` }
+        });
+
+        const listData = await listRes.json() as any;
+        if (!listRes.ok || !listData.success) {
+            throw new Error(`The API token cannot access D1 on account ${this.email}. It needs the D1 (Edit) permission — refresh this page, then create a fresh token from the "Create a token" link above and check that "D1 - Edit" appears in the token summary.`);
+        }
+
         const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${this.id}/d1/database`, {
             method: 'POST',
             headers: {
