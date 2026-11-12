@@ -246,9 +246,13 @@ type Permission struct {
 func BuildTokenURL() (string, error) {
 	permissions := []Permission{
 		{Key: "workers_scripts", Type: "edit"},
+		{Key: "workers_kv_storage", Type: "edit"},
 		{Key: "d1", Type: "edit"},
 		{Key: "page", Type: "edit"},
 		{Key: "dns", Type: "edit"},
+		{Key: "account_settings", Type: "read"},
+		{Key: "workers_subdomain", Type: "edit"},
+		{Key: "account_analytics", Type: "read"},
 		{Key: "user_details", Type: "read"},
 	}
 
