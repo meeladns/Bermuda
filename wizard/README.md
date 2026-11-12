@@ -1,6 +1,6 @@
 <h1 align="center">💦 MeeladVPN Wizard</h1>
 
-This project aims to facilitate the installation process of [MeeladVPN Panel](https://github.com/meeladnsai/MeeladVPN-Panel) efficiently and prevent user mistakes during deployments.
+This project aims to facilitate the installation process of [Bermuda Panel](https://github.com/meeladns/Bermuda) efficiently and prevent user mistakes during deployments.
 The wizard has now two editions: Web and CLI. The web edition generates a `Private Link` after deployment which enables `ONE-CLICK` installations per Cloudflare account. However Wizard CLI stores your logins on your operating system and supports multiple accounts' installations.
 
 <p align="center" style="display:flex; align-items: flex-start; justify-content: center; gap: 20px;">
@@ -25,13 +25,13 @@ https://wizard.meeladvpn-panel.workers.dev
 Make sure to install Termux from [Github source](https://github.com/termux/termux-app/releases/latest) not Google Play.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/meeladnsai/MeeladVPN-Wizard/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/meeladns/Bermuda/main/wizard/install.sh)
 ```
 
 ### Windows (PowerShell)
 
 ```bash
-irm https://raw.githubusercontent.com/meeladnsai/MeeladVPN-Wizard/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/meeladns/Bermuda/main/wizard/install.ps1 | iex
 ```
 
 > [!TIP]

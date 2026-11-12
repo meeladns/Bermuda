@@ -60,7 +60,7 @@ export class CFAccount {
 
         const data = await res.json() as any;
         if (!res.ok || !data.success) {
-            throw new Error(`Error creating D1 database: ${JSON.stringify(data.errors, null, 2)}`)
+            throw new Error(`Error creating D1 database: ${JSON.stringify(data.errors, null, 2)} — the API token needs the D1 (Edit) permission.`)
         }
 
         const databaseId = data.result.uuid as string;

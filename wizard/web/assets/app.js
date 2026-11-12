@@ -8,7 +8,7 @@ const out = document.getElementById('output');
 document.addEventListener('DOMContentLoaded', () => {
     const permissions = [
         { key: 'workers_scripts', type: 'edit' },
-        { key: 'workers_kv_storage', type: 'edit' },
+        { key: 'd1', type: 'edit' },
         { key: 'page', type: 'edit' },
         { key: 'dns', type: 'edit' },
         { key: 'user_details', type: 'read' }
