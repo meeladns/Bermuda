@@ -102,7 +102,7 @@ export async function generateJWTToken(request: Request, env: Env): Promise<Resp
     const username = data.username?.toLowerCase();
     const password = typeof data.password === 'string' ? data.password : '';
 
-    if (!savedPass || username !== accEmail || !(await verifyPassword(password, savedPass))) {
+    if (!savedPass || String(username).toLowerCase() !== accEmail || !(await verifyPassword(password, savedPass))) {
         return respond(false, HttpStatus.UNAUTHORIZED, 'Wrong Credentials.');
     }
 
@@ -189,7 +189,7 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
         return respond(false, HttpStatus.BAD_REQUEST, 'Missing username.');
     }
 
-    if (data.username && data.username !== accEmail) {
+    if (data.username && String(data.username).toLowerCase() !== accEmail) {
         return respond(false, HttpStatus.BAD_REQUEST, 'Wrong username.');
     }
 
