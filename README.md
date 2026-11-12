@@ -1,12 +1,13 @@
 # Bermuda
 
-پنل VPN چندکاربره‌ی خودمان برای Cloudflare Workers — با مدیریت سهمیه، API مخصوص اتصال به VPN CRM و خروجی مبهم‌سازی‌شده برای بقا روی ورکرز.
+Our own multi-user VPN panel for Cloudflare Workers — quota-based subscription management, a CRM integration API, and an obfuscated build output that survives on Workers.
 
-**وضعیت:** فاز طراحی. هنوز کدی نوشته نشده است.
+**Status:** design phase. Gate 0 survival pilot in progress; no panel code written yet.
 
-طرح کامل ساخت، معماری، فازها و تست‌های پذیرش: [PLAN.md](PLAN.md)
+Full build plan, architecture, phases and acceptance tests: [PLAN.md](PLAN.md)
 
-اصول پروژه:
-- هسته‌ی پروتکل از BPB (لایسنس GPL-3.0)؛ بقیه از صفر و متعلق به خودمان. هیچ کدی از پنل‌های دیگر کپی نمی‌شود.
-- ساخت فقط در همین مخزن؛ ادغام با VPN CRM فاز جداست و فقط بعد از تأیید انجام می‌شود.
-- پلن رایگان کلودفلر فقط؛ هر پنل روی اکانت جدا نصب می‌شود.
+Project rules:
+- Protocol core from BPB (GPL-3.0); everything else written from scratch and owned by us. No code is copied from other panels.
+- Project language is English (docs, code, UI).
+- Building happens only in this repo; CRM integration is a separate phase, done only after its own approval.
+- Free Cloudflare plans only; one panel per account.

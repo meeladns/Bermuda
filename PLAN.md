@@ -1,127 +1,132 @@
-# طرح ساخت پنل Bermuda
+# Bermuda Panel — Build Plan
 
-نسخه: ۱.۰ — تاریخ: ۲۰۲۶-۱۱-۱۲ (۲۱ آبان ۱۴۰۵)
-وضعیت: **در انتظار تأیید میلاد** — هنوز هیچ کدی نوشته نشده است.
-مخزن: `meeladns/Bermuda` (خصوصی) — همه‌ی ساخت‌وساز همین‌جا انجام می‌شود؛ ادغام با CRM فاز جداست و فقط بعد از تأیید جدا انجام می‌شود.
+Version: 1.1 — Date: 2026-11-12
+Status: **Awaiting Milad's approval** — no panel code written yet. (Gate 0 pilot, section 9, is being built now on Milad's order.)
+Repo: `meeladns/Bermuda` (private). All building happens here. CRM integration is a separate phase and starts only after its own approval.
+
+**Project language: English** — all documents, code, comments and the panel UI are in English.
 
 ---
 
-## ۱) هدف
+## 1) Goal
 
-ساخت یک پنل VPN متعلق به خودمان، با همان سطح امکاناتی که در زئوس دیدیم و پسندیدیم (مدیریت چند اشتراک، سهمیه، لوکیشن، آمار سهمیه)، اما:
+Build our own VPN panel with the feature level we saw and liked in ZEUS (multi-subscription management, quotas, locations, quota statistics), but:
 
-- بدون استفاده از کد زئوس (لایسنسش فورک و فروش را ممنوع کرده است) — فقط «فهرست فیچرها» از زئوس الهام گرفته شده، نه کدش.
-- با API طراحی‌شده برای VPN CRM از روز اول، تا بات تلگرام بتواند مستقیم اشتراک بسازد، تمدید کند و قطع کند.
-- با خروجی مبهم‌سازی‌شده (Obfuscated) تا روی Cloudflare Workers زنده بماند — همان لایه‌ای که در آزمایش A/B مورخ ۲۰۲۶-۱۱-۱۲ روی حساب خودمان ثابت شد عامل بقای زئوس است.
-- قابل نصب با API روی اکانت‌های جدا (مدل فعلی: هر پنل روی اکانت خودش).
+- No ZEUS code is used (its license forbids forks and selling). Only the *feature list* is inspired by ZEUS, never its code.
+- A purpose-built API for the VPN CRM from day one, so the Telegram bot can create, renew and cut subscriptions directly.
+- An obfuscated build output so the panel survives on Cloudflare Workers — the layer proven decisive in the A/B test on our own account on 2026-11-12 (readable code dies instantly, obfuscated code lives).
+- API-based installation on separate accounts (current model: one panel per account).
 
-خروجی نهایی: ناوگانی از پنل‌های Bermuda روی ~۵۰ اکانت کلودفلر، که CRM آن‌ها را مثل یک «نوع پنل جدید» در کنار BPB مدیریت می‌کند.
+End state: a fleet of Bermuda panels across ~50 Cloudflare accounts, managed by the CRM as a new panel type next to BPB.
 
-## ۲) اصول و خط قرمزها
+## 2) Principles and red lines
 
-- **پلن رایگان فقط.** هیچ قابلیتی نباید به سرویس پولی یا مصرف سهمیه‌ی پولی نیاز داشته باشد.
-- **هیچ کدی از زئوس کپی نمی‌شود.** هسته‌ی پروتکل از BPB گرفته می‌شود (لایسنس GPL-3.0، کپی و تغییر مجاز با حفظ لایسنس و NOTICE) و بقیه از صفر نوشته می‌شود.
-- **هیچ کانال زنده‌ی شخص ثالثی در پنل نیست:** نه آپدیت از راه دور، نه لیست آی‌پی از سرور کسی دیگر. هر چه پنل لازم دارد یا داخل خودش است یا از مخزن خودمان می‌آید.
-- **امنیت درست از اول:** رمز ادمین با هش نمک‌دار (salted) ذخیره می‌شود و توکن سشن جدا از هش رمز است (برعکس زئوس که کوکی‌اش خودِ هش رمز بود).
-- **توکن نصب جدا از رمز پنل:** نصب‌کننده با توکن اکانت کار می‌کند؛ API ادغام با توکن مخصوص خودش (قابل تعویض، جدا از رمز ادمین).
-- **ساخت فقط در این مخزن.** تا وقتی فاز ۳ با تأیید جدا شروع نشده، هیچ تغییری در VPN CRM داده نمی‌شود.
+- **Free plans only.** No feature may require a paid service or paid quota.
+- **No third-party live channels in the panel:** no remote auto-update, no IP lists pulled from someone else's server. Everything the panel needs is either built in or comes from our own repo.
+- **Security stays pragmatic (owner's decision):** everything runs on our own accounts under our own control, so there is no extra hardening program. The basics stay because they are the door lock, not decoration: a secret panel path, an admin password, and a separate API token for the CRM (so the CRM never needs the admin password).
+- **Building happens only in this repo.** Until Phase 3 is approved separately, the VPN CRM is not touched.
 
-## ۳) معماری
+## 3) Architecture
 
-اجزا:
-
-| جزء | نقش | فناوری |
+| Part | Role | Technology |
 |---|---|---|
-| Data Plane (هسته‌ی اتصال) | تونل VLESS و Trojan روی WebSocket، خروجی با `cloudflare:sockets`، تلاش مجدد با ProxyIP/NAT64 | مشتق از BPB v5.1.1 (GPL) |
-| Control Plane (پنل مدیریت) | رابط وب فارسی، مدیریت کاربران و تنظیمات | داخل همان Worker، مسیر محرمانه (secret path) |
-| دیتابیس | کاربران، سهمیه‌ها، مصرف، تنظیمات، سشن‌ها | Cloudflare D1 |
-| API ادغام | ساخت/تمدید/قطع/گزارش اشتراک برای CRM و بات | همان Worker، مسیر `/api/ext/*` با توکن Bearer جدا |
-| خط لوله‌ی بیلد | بیلد → مبهم‌سازی → خروجی نهایی `worker.js` | اسکریپت بیلد در همین مخزن |
-| نصب‌کننده (Installer) | ساخت D1، دیپلوی ورکر، ست‌کردن سکرت‌ها، تحویل لینک پنل و توکن API | اسکریپت API (بدون مرورگر و کلیک) |
+| Data plane (connection core) | VLESS and Trojan tunnels over WebSocket, outbound via `cloudflare:sockets`, ProxyIP/NAT64 retry | Derived from BPB v5.1.1 (GPL-3.0) |
+| Control plane (admin panel) | English web UI, user and settings management | Inside the same Worker, behind a secret path |
+| Database | Users, quotas, usage, settings, sessions | Cloudflare D1 |
+| Integration API | Create/renew/cut/report subscriptions for the CRM and the bot | Same Worker, `/api/ext/*` routes, separate Bearer token |
+| Build pipeline | Build → obfuscate → final `worker.js` | Build scripts in this repo |
+| Installer | Create D1, deploy Worker, set secrets, hand back panel link + API token | API script, no browser clicking |
 
-چرخه‌ی یک اشتراک در حالت نهایی: بات فروش → CRM → API پنل مقصد → ساخت کاربر با پلن (حجم/روز) → لینک اشتراک برمی‌گردد و در CRM ذخیره می‌شود → مشتری وصل می‌شود و سهمیه از اولین اتصال شروع به کم‌شدن می‌کند.
+Final subscription flow: bot sale → CRM → target panel API → user created with a plan (volume/days) → subscription link returns and is stored in the CRM → customer connects and the quota clock starts at first use.
 
-## ۴) تصمیم‌های معماری کلیدی (با دلیل)
+## 4) Key architecture decisions (with reasons)
 
-۱. **هسته‌ی پروتکل از BPB، نه بازنویسی.** دیتاپلین BPB در عمل ثابت‌شده است؛ تلاش بازنویسی ما (MeeladPanel) مسیر TCP اثبات‌نشده داشت. چیزی که پنل‌ها را می‌کشد خوانا بودن کد است، نه خود رله — آن را با مبهم‌سازی حل می‌کنیم.
-۲. **چند کاربر در هر پنل (مدل D1) به‌جای یک کاربر در هر پنل (مدل KV در BPB).** چون فیچرهای مورد پسند (سهمیه‌ی جدا، تمدید خودکار، آمار per-user) بدون دیتابیس کاربر ممکن نیست. سقف محتاطانه‌ی اشتراک روی هر پنل در پایلوت اندازه‌گیری و بعد ثابت می‌شود (شروع: ۱۰ تا ۲۰).
-۳. **مبهم‌سازی جزئی از بیلد است، نه کار دستی.** هر خروجی که دیپلوی می‌شود از خط لوله‌ی بیلد + مبهم‌ساز رد شده است؛ نسخه‌ی خوانا هرگز روی اکانت مشتری دیپلوی نمی‌شود.
-۴. **آپدیت فقط دستی و از مخزن خودمان.** پنل هیچ‌وقت خودش چیزی دانلود نمی‌کند. نسخه‌ی جدید = دیپلوی جدید با نصب‌کننده، بعد از بازبینی.
-۵. **آمار سهمیه داخل پنل.** مصرف ریکوئست روزانه و D1 در برابر سقف رایگان (۱۰۰هزار ریکوئست/روز) در داشبورد پنل دیده می‌شود تا قبل از پرشدن سقف، اشتراک تازه روی آن پنل ساخته نشود.
+1. **Protocol core from BPB, not a rewrite.** BPB's data plane is proven in production. Our from-scratch attempt (MeeladPanel) never got a fully verified TCP path. What gets panels killed is readable code, not the relay itself — obfuscation solves that.
+2. **Many users per panel (D1 model), not one user per panel (BPB's KV model).** The liked features (per-user quotas, auto-renew, per-user stats) are impossible without a user database. A conservative per-panel subscription cap is measured in the pilot, then fixed (starting estimate: 10–20).
+3. **Obfuscation is part of the build, never manual.** Every deployed output passes through build + obfuscator. Readable code is never deployed to a real account.
+4. **Updates are manual and come only from our own repo.** The panel never downloads anything. A new version means a fresh deploy with the installer, after review.
+5. **Quota statistics inside the panel.** Daily request and D1 usage against the free caps (100k requests/day) are visible on the dashboard, so no new subscription is placed on a panel that is about to hit the wall.
+6. **Panel location is a first-class option (owner's request).** The admin can set the panel's region — Smart (Cloudflare decides) or a specific region — applied by redeploying with the new placement, like the ZEUS panel does.
 
-## ۵) فازها
+## 5) Phases
 
-### فاز ۱ — هسته (MVP)
-- [ ] اسکلت مخزن، خط لوله‌ی بیلد و مبهم‌سازی، خروجی `worker.js`
-- [ ] دیتاپلین VLESS + Trojan (از BPB) با احراز هویت از دیتابیس کاربران
-- [ ] مدل کاربر در D1: نام/UUID، سقف حجم (GB)، سقف روز، سقف ریکوئست، سقف دستگاه، شروع از اولین اتصال، فعال/غیرفعال
-- [ ] شمارش مصرف واقعی per-user (حجم و ریکوئست) و قطع خودکار هنگام اتمام سهمیه
-- [ ] پنل مدیریت فارسی: ورود امن، لیست کاربران، ساخت/ویرایش/حذف، ریست حجم/زمان، لینک اشتراک متنی + صفحه‌ی وضعیت کاربر
-- [ ] داشبورد آمار: ترافیک کل، اتصال‌های زنده، ریکوئست امروز در برابر سقف رایگان، مصرف D1
-- [ ] نصب‌کننده‌ی API: ساخت D1 + دیپلوی + سکرت‌ها + تحویل «لینک پنل + توکن API»
-- [ ] تست بقا (A/B روی اکانت قربانی) و تست پروتکل واقعی با کلاینت آزمایشی
-- [ ] پایلوت: نصب روی ۱ اکانت قربانی، چند روز رصد زنده‌ماندن و مصرف
+### Gate 0 — Survival pilot (immediate)
+- [ ] Take the existing MeeladPanel worker code, run it through the obfuscation pipeline, deploy it as a Worker on a workers.dev domain, ZEUS-style.
+- [ ] Verify: panel page serves (no instant 1101 like the readable version), WebSocket upgrade works, protocol test from a real client.
+- [ ] Leave it running as the durability pilot; re-check over the following days.
 
-**خروجی فاز ۱:** یک پنل کاری که روی اکانت جدا نصب می‌شود، چند اشتراک را با سهمیه مدیریت می‌کند و از نظر بقا روی ورکرز ثابت شده است.
+**If Gate 0 fails, we stop and go back to the drawing board before building anything else.**
 
-### فاز ۲ — کامل‌سازی (فیچرهای زئوس‌پسند)
-- [ ] Shadowsocks به‌عنوان پروتکل سوم
-- [ ] ساب YAML (Clash) و QR ساب
-- [ ] عملیات گروهی، فیلتر و جستجو در لیست کاربران
-- [ ] تمدید خودکار حجم/ریکوئست (ساعت قابل تنظیم)
-- [ ] فرگمنت و ECH، انتخاب فینگرپرینت TLS، بلاک تبلیغات و سایت‌های غیراخلاقی per-user
-- [ ] پورت‌های متعدد per-user و کانفیگ‌های چندلوکیشن
-- [ ] ریجن پنل (Smart Placement: خودکار یا انتخاب دستی ریجن) از داخل پنل
-- [ ] مخزن آی‌پی تمیز با فیلتر اپراتورهای ایران + چرخش خودکار آی‌پی
-- [ ] بک‌آپ/ری‌استور تنظیمات و کاربران
+### Phase 1 — Core (MVP)
+- [ ] Repo skeleton, build + obfuscation pipeline, final `worker.js` output
+- [ ] VLESS + Trojan data plane (from BPB) with authentication against the user database
+- [ ] User model in D1: name/UUID, volume cap (GB), day cap, request cap, device cap, start-on-first-connect, active/inactive
+- [ ] Real per-user usage accounting (volume and requests) with automatic cut-off at quota
+- [ ] English admin panel: login, user list, create/edit/delete, reset volume/time, text subscription link + per-user status page
+- [ ] Stats dashboard: total traffic, live connections, today's requests vs the free cap, D1 usage
+- [ ] **Panel location option:** Smart or specific region, applied via redeploy
+- [ ] API installer: create D1 + deploy + secrets + hand back "panel link + API token"
+- [ ] Acceptance tests (section 7) and a multi-day live pilot on one throwaway account
 
-### فاز ۳ — ادغام با CRM (فقط بعد از تأیید جداگانه‌ی میلاد)
-- [ ] API خارجی پنل (`/api/ext/*`): ساخت اشتراک با پلن، تمدید، قطع/فعال، گزارش مصرف — با توکن جدا
-- [ ] نوع پنل جدید «Bermuda» در VPN CRM در کنار BPB (بدون دست‌کاری رفتار فعلی BPB)
-- [ ] اتصال بات: خرید → ساخت خودکار اشتراک روی پنل دارای ظرفیت → تحویل لینک به مشتری
-- [ ] چرخش خودکار: وقتی پنلی از دست رفت یا سقفش پر شد، اشتراک روی پنل بعدی ساخته می‌شود (جایگزین سبک API برای Pandora)
-- [ ] مهاجرت تدریجی؛ اشتراک‌های فعلی BPB دست‌نخورده می‌مانند تا پایان اعتبارشان
+**Phase 1 output:** a working panel on its own account that manages several quota subscriptions and is proven to survive on Workers.
 
-### فاز ۴ — اختیاری (بعد از پایداری فاز ۳)
-- [ ] پروکسی تلگرام (MTProxy) داخل پنل
-- [ ] زنجیره‌ی خروجی SOCKS5/HTTP per-user و مخزن پروکسی آی‌پی ثابت
-- [ ] اسکنر آی‌پی تمیز اختصاصی
+### Phase 2 — Full feature set (the ZEUS-liked extras)
+- [ ] Shadowsocks as the third protocol
+- [ ] YAML (Clash) subscriptions and subscription QR codes
+- [ ] Bulk actions, filters and search in the user list
+- [ ] Automatic volume/request renewal (configurable time)
+- [ ] Fragment and ECH, TLS fingerprint choice, per-user ad/porn blocking
+- [ ] Multiple ports per user and multi-location configs
+- [ ] Clean-IP repository with Iranian operator filters + automatic IP rotation
+- [ ] Settings/users backup and restore
 
-## ۶) مدل استقرار و ظرفیت
+### Phase 3 — CRM integration (only after Milad's separate approval)
+- [ ] External panel API (`/api/ext/*`): create subscription with a plan, renew, cut/activate, usage report — separate token
+- [ ] A new "Bermuda" panel type in the VPN CRM next to BPB (no change to current BPB behavior)
+- [ ] Bot hookup: purchase → subscription auto-created on a panel with capacity → link delivered to the customer
+- [ ] Automatic rotation: when a panel dies or fills up, subscriptions are rebuilt on the next panel (API replacement for the Pandora flow)
+- [ ] Gradual migration; existing BPB subscriptions stay untouched until they expire
 
-- هر پنل روی اکانت کلودفلر جدا (از موجودی ~۵۰ اکانت). ساخت اکانت (سازش) مثل قبل دستی و با میلاد است؛ از نصب به بعد خودکار است.
-- سقف سخت هر اکانت: ۱۰۰٬۰۰۰ ریکوئست در روز (پلن رایگان ورکرز). مصرف واقعی هر اشتراک در پایلوت اندازه‌گیری می‌شود و سقف اشتراک per-panel بر اساس عدد واقعی + حاشیه‌ی امن تعیین می‌شود (برآورد شروع: ۱۰ تا ۲۰ اشتراک فعال روی هر پنل).
-- ریسک توزیع‌شده: از دست رفتن یک اکانت فقط اشتراک‌های همان پنل را تحت تأثیر قرار می‌دهد و CRM آن‌ها را روی پنل بعدی بازسازی می‌کند.
+### Phase 4 — Optional (after Phase 3 is stable)
+- [ ] Telegram proxy (MTProxy) inside the panel
+- [ ] Per-user outbound SOCKS5/HTTP chaining and a static-IP proxy repository
+- [ ] A dedicated clean-IP scanner
 
-## ۷) تست و پذیرش
+## 6) Deployment model and capacity
 
-هر فاز فقط وقتی «تمام» است که این‌ها سبز باشند:
+- One panel per Cloudflare account (from the pool of ~50 accounts). Creating accounts (Sazesh) stays manual with Milad, as today; everything from installation on is automatic.
+- Hard cap per account: 100,000 requests/day (Workers free plan). Real per-subscription consumption is measured in the pilot, and the per-panel subscription cap is set from the real number plus a safety margin (starting estimate: 10–20 active subscriptions per panel).
+- Distributed risk: losing one account only affects that panel's subscriptions, and the CRM rebuilds them on the next panel.
 
-- **تست پروتکل واقعی:** کلاینت آزمایشی (مثل تست MeeladPanel) اتصال VLESS و Trojan را از بیرون برقرار کند، ترافیک رد شود و بایت‌ها برگردند.
-- **تست سهمیه:** ساخت کاربر با سقف کوچک؛ مصرف تا سقف و قطع خودکار؛ ریست و تمدید.
-- **تست بقا:** دیپلوی نسخه‌ی مبهم روی اکانت قربانی و زنده‌ماندن (HTTP 200 و اتصال سالم) در بازه‌ی پایلوت؛ نسخه‌ی خوانا روی هیچ اکانت واقعی دیپلوی نمی‌شود.
-- **تست نصب:** نصب‌کننده از صفر روی یک اکانت تازه، بدون هیچ کلیک دستی، پنل آماده تحویل دهد.
-- **بازبینی امنیتی داخلی:** قبل از فاز ۳، بازبینی مشابه بازبینی زئوس روی کد خودمان (مسیر توکن‌ها، سشن، API).
+## 7) Tests and acceptance
 
-## ۸) ریسک‌ها و کاهش
+A phase is "done" only when these are green:
 
-| ریسک | کاهش |
+- **Real protocol test:** an external test client establishes VLESS and Trojan connections, traffic passes and bytes come back.
+- **Quota test:** create a user with a small cap; consume to the cap and verify automatic cut-off; verify reset and renewal.
+- **Survival test:** the obfuscated build deployed on a throwaway account stays alive (HTTP 200 and working connections) across the pilot period. Readable code is never deployed to a real account.
+- **Install test:** the installer takes a fresh account from zero to a ready panel with no manual clicks.
+- **Internal review:** before Phase 3, a ZEUS-audit-style review of our own code (token paths, sessions, API).
+
+## 8) Risks and mitigations
+
+| Risk | Mitigation |
 |---|---|
-| اسکنر کلودفلر در آینده مبهم‌سازی را هم بگیرد | طراحی بر اساس چرخش سریع (نصب API چندثانیه‌ای)؛ اشتراک‌ها قابل بازسازی روی اکانت بعدی‌اند |
-| گزارش abuse روی اکانت‌ها | اکانت‌ها مصرفی فرض می‌شوند؛ هر پنل مستقل؛ داده‌ی مشتری در CRM است نه فقط در پنل |
-| پر شدن سقف ۱۰۰هزار ریکوئست روزانه | آمار سهمیه داخل پنل + سقف اشتراک per-panel + هشدار قبل از پر شدن |
-| لو رفتن توکن API یا رمز پنل | توکن API جدا و قابل تعویض؛ رمز با هش نمک‌دار؛ سشن جدا از رمز |
-| خطای انسانی در مهاجرت CRM | فاز ۳ جدا و با تأیید؛ BPB دست‌نخورده تا پایان مهاجرت |
+| Cloudflare's scanner one day catches obfuscated code too | Design for fast rotation (API install takes seconds); subscriptions are rebuildable on the next account |
+| Abuse reports on accounts | Accounts are treated as disposable; each panel is independent; customer data lives in the CRM, not only in the panel |
+| Hitting the 100k/day free request cap | In-panel quota stats + per-panel subscription cap + warning before the cap |
+| API token or panel password leaks | Separate, replaceable API token; panel behind a secret path |
+| Mistakes during CRM migration | Phase 3 is separate and approved on its own; BPB stays untouched until migration ends |
 
-## ۹) گام‌های اجرایی از همین‌جا
+## 9) Immediate steps
 
-۱. تأیید همین طرح توسط میلاد (+ جواب دو تصمیم باز در بخش ۱۰).
-۲. ساخت اسکلت مخزن و خط لوله‌ی بیلد/مبهم‌سازی؛ تست بقا روی اکانت قربانی. ← دروازه: اگر بقا ثابت نشد، ادامه نمی‌دهیم و برمی‌گردیم به میز طراحی.
-۳. ساخت فاز ۱ کامل + تست‌های پذیرش + پایلوت چندروزه.
-۴. گزارش پایلوت به میلاد → تأیید → فاز ۲.
-۵. گزارش فاز ۲ → تأیید جدا → فاز ۳ (ادغام CRM).
+1. Gate 0 pilot (above) — build and deploy now, verify, leave running.
+2. Milad approves this plan (+ the open decisions in section 10).
+3. Phase 1 build + acceptance tests + multi-day pilot.
+4. Pilot report to Milad → approval → Phase 2.
+5. Phase 2 report → separate approval → Phase 3 (CRM integration).
 
-## ۱۰) تصمیم‌های باز برای میلاد
+## 10) Open decisions for Milad
 
-۱. **اسم محصول:** مخزن Bermuda است؛ اسم نمایشی پنل برای مشتری همان MeeladVPN می‌ماند؟
-۲. **اکانت پایلوت:** توکن یک اکانت قربانی برای تست بقا و پایلوت فاز ۱ لازم است (ساخت اکانت با خودت، مثل سازش).
+1. **Display name:** the repo is Bermuda; does the customer-facing panel name stay MeeladVPN?
+2. **Pilot account:** Gate 0 runs as a throwaway test on the main account's workers.dev and can be deleted at any time. The Phase 1 pilot needs one throwaway account token (account creation stays with Milad, Sazesh-style).
