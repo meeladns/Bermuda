@@ -76,7 +76,7 @@ export async function getUsage(request: Request, env: Env) {
     try {
         const auth = await authenticate(request, env);
         if (!auth) {
-            throw new Error('Unauthorized or expired session.');
+            return respond(false, HttpStatus.UNAUTHORIZED, 'Unauthorized or expired session.');
         }
 
         const usage = await getCfWorkerUsage();

@@ -31,7 +31,15 @@ export async function fetchWarpAccounts(env: Env): Promise<WarpAccount[]> {
             if (index === 0) await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        await storePut(env, 'warpAccounts', JSON.stringify(warpAccounts));
+        try {
+            await storePut(env, 'warpAccounts', JSON.stringify(warpAccounts));
+        } catch (storeError) {
+            console.error(
+                'Failed to persist WARP accounts to storage:',
+                storeError instanceof Error ? storeError.message : String(storeError)
+            );
+            throw storeError;
+        }
         return warpAccounts;
 
     } catch (error) {

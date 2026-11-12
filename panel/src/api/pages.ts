@@ -6,6 +6,14 @@ export async function deployPages(script: string) {
     const projectName = mainDomain.split('.')[0];
     const uploadForm = new FormData();
     uploadForm.append('manifest', '{}');
+    uploadForm.append('deployment_configs', JSON.stringify({
+        production: {
+            env_vars: {
+                CF_API_TOKEN: { type: 'secret_text', value: apiToken },
+                CF_ACCOUNT_ID: { type: 'plain_text', value: accID }
+            }
+        }
+    }));
     uploadForm.append(
         '_worker.js',
         new Blob([script], { type: 'application/javascript' }),

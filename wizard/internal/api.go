@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"regexp"
 	"time"
 
 	"github.com/cloudflare/cloudflare-go/v7"
@@ -83,13 +84,19 @@ func CreateCfAccount(ctx context.Context, token string) (*CfAccount, error) {
 	acc := NewCfAccount(token)
 
 	tokenRes, err := acc.Client.User.Tokens.Verify(ctx)
-	if err != nil || tokenRes.Status != "active" {
+	if err != nil {
 		return nil, err
+	}
+	if tokenRes.Status != "active" {
+		return nil, fmt.Errorf("API token is %s", tokenRes.Status)
 	}
 
 	accountsRes, err := acc.Client.Accounts.List(ctx, accounts.AccountListParams{})
 	if err != nil {
 		return nil, err
+	}
+	if len(accountsRes.Result) == 0 {
+		return nil, fmt.Errorf("no Cloudflare accounts are accessible with this token")
 	}
 	acc.ID = accountsRes.Result[0].ID
 
@@ -151,7 +158,15 @@ func (acc *CfAccount) cfREST(ctx context.Context, method, url string, payload an
 	}
 	defer resp.Body.Close()
 
-	return io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("Cloudflare API request failed with HTTP %d: %s", resp.StatusCode, string(raw))
+	}
+
+	return raw, nil
 }
 
 type cfAPIResponse struct {
@@ -160,6 +175,8 @@ type cfAPIResponse struct {
 		Message string `json:"message"`
 	} `json:"errors"`
 }
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 func (acc *CfAccount) CreateD1Database(ctx context.Context, workerName string) (string, error) {
 	raw, err := acc.cfREST(ctx, http.MethodPost,
@@ -181,6 +198,9 @@ func (acc *CfAccount) CreateD1Database(ctx context.Context, workerName string) (
 	if !parsed.Success || parsed.Result.UUID == "" {
 		return "", fmt.Errorf("failed to create D1 database: %v", parsed.Errors)
 	}
+	if !uuidPattern.MatchString(parsed.Result.UUID) {
+		return "", fmt.Errorf("failed to create D1 database: Cloudflare returned an invalid database UUID")
+	}
 
 	databaseID := parsed.Result.UUID
 
@@ -197,6 +217,37 @@ func (acc *CfAccount) CreateD1Database(ctx context.Context, workerName string) (
 	}
 	if !queryParsed.Success {
 		return "", fmt.Errorf("failed to initialize D1 database: %v", queryParsed.Errors)
+	}
+
+	raw, err = acc.cfREST(ctx, http.MethodPost,
+		fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/d1/database/%s/query", acc.ID, databaseID),
+		map[string]string{"sql": "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'store'"})
+	if err != nil {
+		return "", err
+	}
+
+	var readParsed struct {
+		cfAPIResponse
+		Result []struct {
+			Results []struct {
+				Name string `json:"name"`
+			} `json:"results"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &readParsed); err != nil {
+		return "", err
+	}
+
+	found := false
+	for _, result := range readParsed.Result {
+		for _, row := range result.Results {
+			if row.Name == "store" {
+				found = true
+			}
+		}
+	}
+	if !readParsed.Success || !found {
+		return "", fmt.Errorf("failed to verify D1 database: store table could not be read back after initialization")
 	}
 
 	return databaseID, nil
@@ -241,6 +292,8 @@ func (acc *CfAccount) DeployWorker(ctx context.Context, name string, script io.R
 		"compatibility_flags": []string{"nodejs_compat"},
 		"bindings": []map[string]string{
 			{"type": "d1", "name": "db", "id": databaseID},
+			{"type": "secret_text", "name": "CF_API_TOKEN", "text": acc.Token},
+			{"type": "plain_text", "name": "CF_ACCOUNT_ID", "text": acc.ID},
 		},
 	})
 	if err != nil {
@@ -333,6 +386,10 @@ func (acc *CfAccount) CreatePagesProject(ctx context.Context, name, databaseID s
 					"d1_databases": map[string]any{
 						"db": map[string]string{"id": databaseID},
 					},
+					"env_vars": map[string]any{
+						"CF_API_TOKEN":  map[string]string{"type": "secret_text", "value": acc.Token},
+						"CF_ACCOUNT_ID": map[string]string{"type": "plain_text", "value": acc.ID},
+					},
 				},
 			},
 		})
@@ -369,6 +426,87 @@ func (acc *CfAccount) DeployPagesScript(ctx context.Context, name string, script
 	)
 	if er != nil {
 		return er
+	}
+
+	return nil
+}
+
+func (acc *CfAccount) VerifyWorkerDeployment(ctx context.Context, name, databaseID string) error {
+	raw, err := acc.cfREST(ctx, http.MethodGet,
+		fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/workers/scripts/%s/settings", acc.ID, name), nil)
+	if err != nil {
+		return fmt.Errorf("failed to verify deployment: %w", err)
+	}
+
+	var parsed struct {
+		cfAPIResponse
+		Result struct {
+			Bindings []struct {
+				Name       string `json:"name"`
+				Type       string `json:"type"`
+				ID         string `json:"id"`
+				DatabaseID string `json:"database_id"`
+			} `json:"bindings"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return err
+	}
+	if !parsed.Success {
+		return fmt.Errorf("failed to verify deployment: %v", parsed.Errors)
+	}
+
+	hasD1, hasSecret, hasAccountID := false, false, false
+	for _, binding := range parsed.Result.Bindings {
+		switch {
+		case binding.Type == "d1" && binding.Name == "db" && (binding.ID == databaseID || binding.DatabaseID == databaseID):
+			hasD1 = true
+		case binding.Type == "secret_text" && binding.Name == "CF_API_TOKEN":
+			hasSecret = true
+		case binding.Type == "plain_text" && binding.Name == "CF_ACCOUNT_ID":
+			hasAccountID = true
+		}
+	}
+	if !hasD1 || !hasSecret || !hasAccountID {
+		return fmt.Errorf("failed to verify deployment: deployed Worker is missing expected bindings (d1 \"db\", secret CF_API_TOKEN, plain CF_ACCOUNT_ID)")
+	}
+
+	return nil
+}
+
+func (acc *CfAccount) VerifyPagesDeployment(ctx context.Context, name, databaseID string) error {
+	raw, err := acc.cfREST(ctx, http.MethodGet,
+		fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/pages/projects/%s", acc.ID, name), nil)
+	if err != nil {
+		return fmt.Errorf("failed to verify deployment: %w", err)
+	}
+
+	var parsed struct {
+		cfAPIResponse
+		Result struct {
+			DeploymentConfigs struct {
+				Production struct {
+					D1Databases map[string]struct {
+						ID string `json:"id"`
+					} `json:"d1_databases"`
+					EnvVars map[string]json.RawMessage `json:"env_vars"`
+				} `json:"production"`
+			} `json:"deployment_configs"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return err
+	}
+	if !parsed.Success {
+		return fmt.Errorf("failed to verify deployment: %v", parsed.Errors)
+	}
+
+	production := parsed.Result.DeploymentConfigs.Production
+	database, ok := production.D1Databases["db"]
+	_, hasToken := production.EnvVars["CF_API_TOKEN"]
+	_, hasAccount := production.EnvVars["CF_ACCOUNT_ID"]
+	if !ok || database.ID != databaseID || !hasToken || !hasAccount {
+		return fmt.Errorf("failed to verify deployment: Pages project is missing expected bindings (d1 \"db\", secret CF_API_TOKEN, plain CF_ACCOUNT_ID)")
 	}
 
 	return nil

@@ -73,6 +73,9 @@ export class CFAccount {
         }
 
         const databaseId = data.result.uuid as string;
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(databaseId)) {
+            throw new Error(`Error creating D1 database: Cloudflare returned an invalid database UUID.`)
+        }
 
         const queryRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${this.id}/d1/database/${databaseId}/query`, {
             method: 'POST',
@@ -88,6 +91,23 @@ export class CFAccount {
         const queryData = await queryRes.json() as any;
         if (!queryRes.ok || !queryData.success) {
             throw new Error(`Error initializing D1 database: ${JSON.stringify(queryData.errors, null, 2)}`)
+        }
+
+        const readRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${this.id}/d1/database/${databaseId}/query`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'store'"
+            })
+        });
+
+        const readData = await readRes.json() as any;
+        const tables = readData?.result?.[0]?.results ?? [];
+        if (!readRes.ok || !readData.success || !tables.some((row: any) => row.name === 'store')) {
+            throw new Error(`Error verifying D1 database: the store table could not be read back after initialization.`)
         }
 
         return databaseId;
@@ -128,7 +148,9 @@ export class CFAccount {
             compatibility_date: date,
             compatibility_flags: ['nodejs_compat'],
             bindings: [
-                { type: 'd1', name: 'db', id: databaseId }
+                { type: 'd1', name: 'db', id: databaseId },
+                { type: 'secret_text', name: 'CF_API_TOKEN', text: this.token },
+                { type: 'plain_text', name: 'CF_ACCOUNT_ID', text: this.id }
             ]
         };
 
@@ -183,6 +205,10 @@ export class CFAccount {
                     browsers: {},
                     compatibility_date: date,
                     compatibility_flags: ['nodejs_compat'],
+                    env_vars: {
+                        'CF_API_TOKEN': { type: 'secret_text', value: this.token },
+                        'CF_ACCOUNT_ID': { type: 'plain_text', value: this.id }
+                    },
                     d1_databases: {
                         'db': { id: databaseId }
                     }
@@ -191,6 +217,43 @@ export class CFAccount {
         });
 
         return project.subdomain ?? '';
+    }
+
+    async verifyWorkerDeployment(name: string, databaseId: string) {
+        const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${this.id}/workers/scripts/${name}/settings`, {
+            headers: { 'Authorization': `Bearer ${this.token}` }
+        });
+
+        const data = await res.json() as any;
+        if (!res.ok || !data.success) {
+            throw new Error(`Error verifying deployment: could not read back the Worker settings.`)
+        }
+
+        const bindings = data.result?.bindings ?? [];
+        const hasD1 = bindings.some((b: any) => b.type === 'd1' && b.name === 'db' && (b.id === databaseId || b.database_id === databaseId));
+        const hasSecret = bindings.some((b: any) => b.type === 'secret_text' && b.name === 'CF_API_TOKEN');
+        const hasAccountId = bindings.some((b: any) => b.type === 'plain_text' && b.name === 'CF_ACCOUNT_ID');
+        if (!hasD1 || !hasSecret || !hasAccountId) {
+            throw new Error(`Error verifying deployment: the deployed Worker is missing expected bindings (d1 "db", secret CF_API_TOKEN, plain CF_ACCOUNT_ID).`)
+        }
+    }
+
+    async verifyPagesDeployment(name: string, databaseId: string) {
+        let project: any;
+        try {
+            project = await this.client.pages.projects.get(name, {
+                account_id: this.id,
+            });
+        } catch (error) {
+            throw new Error(`Error verifying deployment: could not read back the Pages project.`)
+        }
+
+        const production = project?.deployment_configs?.production ?? {};
+        const d1 = production?.d1_databases?.db;
+        const envVars = production?.env_vars ?? {};
+        if (!d1 || d1.id !== databaseId || !envVars.CF_API_TOKEN || !envVars.CF_ACCOUNT_ID) {
+            throw new Error(`Error verifying deployment: the Pages project is missing expected bindings (d1 "db", secret CF_API_TOKEN, plain CF_ACCOUNT_ID).`)
+        }
     }
 
     async deployPages(name: string, script: Uploadable) {

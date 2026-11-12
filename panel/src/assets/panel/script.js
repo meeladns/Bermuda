@@ -773,7 +773,7 @@ function resetPassword(event) {
 
     fetch('./panel/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
             username,

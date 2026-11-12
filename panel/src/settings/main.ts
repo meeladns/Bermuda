@@ -6,11 +6,11 @@ import { createCNAME, listZones } from '@api/dns';
 import { decompressGzipBase64, safeError } from '@common';
 
 export async function updateMainSettings(newSettings: PanelSettings | null): Promise<Partial<EmbededSettings>> {
-    const { accID, accEmail, apiToken, mainDomain, vlUUID, trPass, securePath } = getGlobals();
+    const { accID, accEmail, mainDomain, vlUUID, trPass, securePath } = getGlobals();
     const settings: EmbededSettings = {
         accID,
         accEmail,
-        apiToken,
+        apiToken: '',
         vlUUID: newSettings ? newSettings.vlUUID : vlUUID,
         trPass: newSettings ? newSettings.trPass : trPass,
         securePath: newSettings ? newSettings.securePath : securePath,
@@ -101,11 +101,11 @@ export async function buildScript(upgradePanel: boolean, settings?: MainSettings
         script = await decompressGzipBase64(SOURCE_CONTENT);
     }
 
-    const { accID, accEmail, apiToken, mainDomain } = getGlobals();
+    const { accID, accEmail, mainDomain } = getGlobals();
     const embededSettings = {
         accID,
         accEmail,
-        apiToken,
+        apiToken: '',
         vlUUID: settings.vlUUID,
         trPass: settings.trPass,
         securePath: settings.securePath,

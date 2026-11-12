@@ -86,6 +86,9 @@ async function deployPages(
     await account.deployPages(workerName, script);
     success('Pages deployed successfully!');
 
+    await account.verifyPagesDeployment(workerName, databaseId);
+    success('Deployment verified successfully!');
+
     const url = new URL(`https://${subdomain}/${path}/panel`);
     const payload = {
         url: url.href,
@@ -122,6 +125,9 @@ async function deployWorkers(
 
     await account.enableSubdomain(workerName);
     success('Worker subdomain enabled successfully!');
+
+    await account.verifyWorkerDeployment(workerName, databaseId);
+    success('Deployment verified successfully!');
 
     const url = new URL(`https://${workerName}.${subdomain}/${path}/panel`);
     const payload = {

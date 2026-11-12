@@ -78,6 +78,11 @@ func DeployToWorkers(ctx context.Context, acc *CfAccount, logger *Logger, worker
 	}
 	logger.Success("Worker subdomain enabled successfully!")
 
+	if err := acc.VerifyWorkerDeployment(ctx, workerName, databaseID); err != nil {
+		logger.Fatal(err)
+	}
+	logger.Success("Deployment verified successfully!")
+
 	path := url.QueryEscape(settings.SecurePath)
 	return fmt.Sprintf("https://%s.%s/%s/panel", workerName, subdomain, path)
 }
@@ -99,6 +104,11 @@ func DeployToPages(ctx context.Context, acc *CfAccount, logger *Logger, workerNa
 		logger.Fatal(err)
 	}
 	logger.Success("Pages deployed successfully!")
+
+	if err := acc.VerifyPagesDeployment(ctx, workerName, databaseID); err != nil {
+		logger.Fatal(err)
+	}
+	logger.Success("Deployment verified successfully!")
 
 	path := url.QueryEscape(settings.SecurePath)
 	return fmt.Sprintf("https://%s/%s/panel", subdomain, path)

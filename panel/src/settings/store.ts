@@ -32,7 +32,14 @@ export async function storeGet(env: Env, key: string): Promise<string | null> {
 
 export async function storeGetJson<T>(env: Env, key: string): Promise<T | null> {
     const raw = await storeGet(env, key);
-    return raw ? (JSON.parse(raw) as T) : null;
+    if (!raw) return null;
+
+    try {
+        return JSON.parse(raw) as T;
+    } catch {
+        console.error(`Failed to parse stored JSON for key "${key}"; treating it as missing.`);
+        return null;
+    }
 }
 
 export async function storePut(env: Env, key: string, value: string): Promise<void> {

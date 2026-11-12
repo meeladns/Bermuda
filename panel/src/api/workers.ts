@@ -7,7 +7,11 @@ export async function deployWorkers(script: string) {
         main_module: 'worker.js',
         keep_bindings: ['d1'],
         compatibility_date: new Date().toISOString().split('T')[0],
-        compatibility_flags: ['nodejs_compat']
+        compatibility_flags: ['nodejs_compat'],
+        bindings: [
+            { name: 'CF_API_TOKEN', type: 'secret_text', text: apiToken },
+            { name: 'CF_ACCOUNT_ID', type: 'plain_text', text: accID }
+        ]
     };
     const uploadForm = new FormData();
     uploadForm.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));

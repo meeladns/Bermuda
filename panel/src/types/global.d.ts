@@ -3,6 +3,8 @@ import { EmbededSettings } from './settings';
 declare global {
     interface Env {
         readonly CF_PAGES: string;
+        readonly CF_API_TOKEN: string;
+        readonly CF_ACCOUNT_ID: string;
         readonly db: D1Database;
         readonly UUID?: string;
         readonly TR_PASS?: string;

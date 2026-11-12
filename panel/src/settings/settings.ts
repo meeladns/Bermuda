@@ -34,9 +34,9 @@ export function init(request: Request, env: Env) {
     
     const { pathname, origin, searchParams, hostname } = new URL(request.url);
     globalSettings = {
-        accID: EMBEDED_SETTINGS.accID,
+        accID: env.CF_ACCOUNT_ID || EMBEDED_SETTINGS.accID,
         accEmail: EMBEDED_SETTINGS.accEmail.toLowerCase(),
-        apiToken: EMBEDED_SETTINGS.apiToken,
+        apiToken: env.CF_API_TOKEN || EMBEDED_SETTINGS.apiToken,
         vlUUID: EMBEDED_SETTINGS.vlUUID,
         trPass: EMBEDED_SETTINGS.trPass,
         securePath: EMBEDED_SETTINGS.securePath,

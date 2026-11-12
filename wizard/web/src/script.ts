@@ -41,7 +41,7 @@ export async function buildScript(
     const embededSettings = {
         accID: account.id,
         accEmail: account.email,
-        apiToken: account.token,
+        apiToken: '',
         vlUUID: crypto.randomUUID(),
         trPass: randString(passCharset, 16, 20),
         securePath: path,

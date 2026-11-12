@@ -56,7 +56,7 @@ func buildScript(acc *CfAccount, workerName, subdomain string) (io.Reader, *Embe
 	settings := &EmbeddedSettings{
 		AccID:       acc.ID,
 		AccEmail:    acc.Email,
-		ApiToken:    acc.Token,
+		ApiToken:    "",
 		VlUUID:      vlUUID,
 		TrPass:      trPass,
 		SecurePath:  securePath,
